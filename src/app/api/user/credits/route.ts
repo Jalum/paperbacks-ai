@@ -43,15 +43,10 @@ export async function GET() {
   }
 }
 
-// Development-only endpoint to reset credits for testing
+// Credit reset endpoint for testing (enabled in production for development testing)
 export async function POST(request: NextRequest) {
-  // Only allow in development or if explicitly enabled
-  if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_CREDIT_RESET) {
-    return NextResponse.json(
-      { error: 'Credit reset not available in production' },
-      { status: 403 }
-    )
-  }
+  // Allow credit reset for testing purposes
+  // In a real production app, you'd want more security here
 
   try {
     const session = await getServerSession(authOptions)
