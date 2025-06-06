@@ -5,7 +5,7 @@ import { put } from '@vercel/blob'
 import sharp from 'sharp'
 import prisma from '@/lib/prisma'
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB - reduced to work within Vercel limits
+const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4MB - conservative limit for serverless functions
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 // Configure route segment for larger payloads
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     if (file.size > MAX_FILE_SIZE) {
       console.log('File too large:', file.size)
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 5MB.' },
+        { error: 'File too large. Maximum size is 4MB.' },
         { status: 400 }
       )
     }

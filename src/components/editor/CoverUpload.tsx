@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { upload } from '@vercel/blob/client';
 
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB - can be larger with direct blob upload
+const MAX_SIZE = 4 * 1024 * 1024; // 4MB - conservative limit for fallback upload
 const ACCEPTED_FILES = {
   'image/jpeg': [],
   'image/png': [],
@@ -74,11 +74,6 @@ export default function CoverUpload() {
   }, []);
 
   const compressImage = useCallback(async (file: File): Promise<File> => {
-    // If file is already under limit, return as-is
-    if (file.size <= MAX_SIZE) {
-      return file;
-    }
-
     console.log('Compressing image from', (file.size / 1024 / 1024).toFixed(1), 'MB');
     
     return new Promise((resolve, reject) => {
@@ -87,10 +82,24 @@ export default function CoverUpload() {
       const img = new globalThis.Image();
       
       img.onload = () => {
-        // Calculate new dimensions to reduce file size
         let { width, height } = img;
-        const maxDimension = 2000; // Reasonable max for book covers
+        let quality = 0.85;
+        let maxDimension = 2000;
         
+        // Determine compression level based on original file size
+        const fileSizeMB = file.size / (1024 * 1024);
+        if (fileSizeMB > 8) {
+          maxDimension = 1600;
+          quality = 0.7;
+        } else if (fileSizeMB > 6) {
+          maxDimension = 1800;
+          quality = 0.75;
+        } else if (fileSizeMB > 4) {
+          maxDimension = 2000;
+          quality = 0.8;
+        }
+        
+        // Calculate new dimensions
         if (width > maxDimension || height > maxDimension) {
           const scale = maxDimension / Math.max(width, height);
           width = Math.round(width * scale);
@@ -103,18 +112,30 @@ export default function CoverUpload() {
         // Draw and compress
         ctx?.drawImage(img, 0, 0, width, height);
         
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const compressedFile = new File([blob], file.name, {
-              type: 'image/jpeg',
-              lastModified: Date.now(),
-            });
-            console.log('Compressed to', (compressedFile.size / 1024 / 1024).toFixed(1), 'MB');
-            resolve(compressedFile);
-          } else {
-            reject(new Error('Failed to compress image'));
-          }
-        }, 'image/jpeg', 0.85); // 85% quality
+        const tryCompress = (currentQuality: number) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              
+              console.log('Compressed to', (compressedFile.size / 1024 / 1024).toFixed(1), 'MB', 'at quality', currentQuality);
+              
+              // If still too large and we can compress more, try again
+              if (compressedFile.size > MAX_SIZE && currentQuality > 0.5) {
+                console.log('Still too large, trying lower quality...');
+                tryCompress(currentQuality - 0.1);
+              } else {
+                resolve(compressedFile);
+              }
+            } else {
+              reject(new Error('Failed to compress image'));
+            }
+          }, 'image/jpeg', currentQuality);
+        };
+        
+        tryCompress(quality);
       };
       
       img.onerror = () => reject(new Error('Failed to load image for compression'));
@@ -129,14 +150,17 @@ export default function CoverUpload() {
     // In production, we'll try direct upload first and fallback if it fails
     const shouldTryDirectUpload = true; // Always try direct upload first
     
-    if (shouldTryDirectUpload) {
+    // Check if Vercel Blob is available by trying a simple test
+    const canUseVercelBlob = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+    
+    if (shouldTryDirectUpload && canUseVercelBlob) {
       // Try direct Vercel Blob upload first (bypasses 4.5MB limit)
       console.log('Attempting direct Vercel Blob upload');
       
-      // Generate unique filename
+      // Generate unique filename with user session info
       const timestamp = Date.now();
       const fileExtension = file.name.split('.').pop() || 'jpg';
-      const filename = `covers/${timestamp}.${fileExtension}`;
+      const filename = `covers/${session?.user?.email || 'anonymous'}/${timestamp}.${fileExtension}`;
       
       try {
         const blob = await upload(filename, file, {
@@ -147,21 +171,33 @@ export default function CoverUpload() {
         console.log('Direct blob upload successful:', blob.url);
         
         // Still save metadata to database
-        await fetch('/api/upload/metadata', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: blob.pathname,
-            url: blob.url,
-            originalName: file.name,
-            contentType: file.type,
-            size: file.size,
-          }),
-        });
+        try {
+          await fetch('/api/upload/metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: blob.pathname,
+              url: blob.url,
+              originalName: file.name,
+              contentType: file.type,
+              size: file.size,
+            }),
+          });
+        } catch (metadataError) {
+          console.warn('Failed to save metadata, but upload was successful:', metadataError);
+        }
         
         return blob.url;
       } catch (error) {
-        console.error('Direct blob upload failed, falling back to compressed upload:', error);
+        console.error('Direct blob upload failed:', error);
+        if (error instanceof Error) {
+          // Check for specific error types
+          if (error.message.includes('aborted') || error.message.includes('network')) {
+            console.log('Network issue with direct upload, falling back to compression');
+          } else if (error.message.includes('unauthorized') || error.message.includes('auth')) {
+            console.log('Authentication issue with direct upload, falling back to compression');
+          }
+        }
         // Fall through to compression method below
       }
     }
@@ -201,7 +237,7 @@ export default function CoverUpload() {
       }
       throw error;
     }
-  }, [handleResponse, compressImage]);
+  }, [handleResponse, compressImage, session]);
 
   const onDrop = useCallback(
     async (acceptedFiles: FileWithPath[], rejectedFiles: FileRejection[]) => {
@@ -302,7 +338,7 @@ export default function CoverUpload() {
         ) : isDragActive ? (
           <p className="text-center text-indigo-700">Drop the image here ...</p>
         ) : (
-          <p className="text-center text-gray-500">Drag & drop cover image here, or click to select (Max 10MB, JPG/PNG/WEBP)</p>
+          <p className="text-center text-gray-500">Drag & drop cover image here, or click to select (Large images auto-compressed, JPG/PNG/WEBP)</p>
         )}
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
