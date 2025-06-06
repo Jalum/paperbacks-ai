@@ -429,9 +429,6 @@ function generateCoverStructure(
     <div class="bleed-area">
       <div class="trim-area">
         <div class="back-cover">
-          ${designData.backCoverBackgroundType === 'pattern' ? 
-            '<div class="pattern-overlay"></div>' : ''}
-          
           ${designData.backCoverBlurbEnableBox ? `
             <div class="blurb-box">
               <div class="back-cover-text">${backCoverText}</div>
