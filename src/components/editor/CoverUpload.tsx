@@ -150,8 +150,8 @@ export default function CoverUpload() {
     // In production, we'll try direct upload first and fallback if it fails
     const shouldTryDirectUpload = true; // Always try direct upload first
     
-    // Check if Vercel Blob is available by trying a simple test
-    const canUseVercelBlob = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+    // Check if Vercel Blob is available - now that BLOB_READ_WRITE_TOKEN is configured
+    const canUseVercelBlob = true; // Enabled with BLOB_READ_WRITE_TOKEN
     
     if (shouldTryDirectUpload && canUseVercelBlob) {
       // Try direct Vercel Blob upload first (bypasses 4.5MB limit)
