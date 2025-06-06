@@ -15,8 +15,9 @@ declare module 'next-auth' {
 }
 
 // Check if we're in a preview deployment
-const isPreviewDeployment = process.env.VERCEL_ENV === 'preview' || 
-  (process.env.VERCEL_URL && !process.env.VERCEL_URL.includes('paperbacks-ai-online-v3.vercel.app'));
+// Only consider it a preview deployment if VERCEL_ENV is explicitly 'preview'
+// Production deployments accessed via deployment URL should still work
+const isPreviewDeployment = process.env.VERCEL_ENV === 'preview';
 
 // Debug logging for auth configuration
 console.log('Auth Debug:', {
