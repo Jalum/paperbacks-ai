@@ -1,24 +1,23 @@
-import openai from '../../../lib/openai';
+import openai from '../../../lib/openai'; // Corrected path
 import { NextResponse } from 'next/server';
 
 interface AiGenerateRequestBody {
   prompt: string;
   n?: number;
-  targetWidthPx?: number;
-  targetHeightPx?: number;
+  // targetWidthPx?: number; // Removed as unused for now
+  // targetHeightPx?: number;// Removed as unused for now
 }
 
 export async function POST(request: Request) {
   try {
-    const { prompt, n = 1, targetWidthPx, targetHeightPx } = await request.json() as AiGenerateRequestBody;
+    // Removed targetWidthPx, targetHeightPx from destructuring
+    const { prompt, n = 1 } = await request.json() as AiGenerateRequestBody;
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
-    // Validation for targetWidthPx and targetHeightPx can be added here if they become strictly necessary for future logic
 
-    // DALL-E 3 will generate at a fixed portrait size as per previous discussion
-    const dallESize: "1024x1792" = "1024x1792";
+    const dallESize = "1024x1792" as const; // Use const assertion
 
     console.log(`Generating AI image with DALL-E. Prompt: "${prompt.substring(0,100)}...", Size: ${dallESize}`);
 
@@ -27,7 +26,7 @@ export async function POST(request: Request) {
       prompt: prompt,
       n: n,
       size: dallESize, 
-      quality: "standard", // "standard" or "hd"
+      quality: "standard", 
       response_format: "url", 
     });
 
@@ -40,23 +39,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to get image URL from OpenAI DALL-E response' }, { status: 500 });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in /api/ai-generate route:', error);
-    // Check if the error is an OpenAI API error to provide more specific feedback
-    if (error && typeof error === 'object' && 'status' in error && 'message' in error) {
-        // This is a basic check. For more robust OpenAI error handling, 
-        // you might need to import OpenAI.APIError and use `instanceof` if using the openai npm package v3.x
-        // For v4+, the error structure is different.
-        // const openAIError = error as { status: number; message: string; type?: string; code?: string; param?: string };
+    
+    // Type guard for error object
+    if (error instanceof Error && 'message' in error) {
         return NextResponse.json(
             { 
                 error: 'OpenAI API error during image generation', 
-                details: error.message, 
-                // statusCode: openAIError.status 
+                details: error.message
             }, 
-            { status: (error as any).status || 500 }
+            { status: 500 }
         );
     }
-    return NextResponse.json({ error: 'Failed to generate image due to an unexpected server error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Failed to generate image due to an unexpected server error'
+    }, { status: 500 });
   }
 } 

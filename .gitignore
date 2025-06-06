@@ -1,72 +1,44 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Dependencies
+# dependencies
 /node_modules
 /.pnp
-.pnp.js
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# Testing
+# testing
 /coverage
 
-# Next.js build output
+# next.js
 /.next/
 /out/
 
-# Production build files
+# production
 /build
 
-# Static Site Generation and Server Side Rendering files
-.env*.local
-.env*.development.local
-.env*.test.local
-.env*.production.local
-
-# Temp files
+# misc
+.DS_Store
 *.pem
 
-# Log files
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+.pnpm-debug.log*
 
-# Editor directories and files
-.idea
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-*.sublime-workspace
+# env files (can opt-in for committing if needed)
+.env*
 
-# IDE / Editor specific metadata
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.tmproj
-*.esproj
-*.dtproj
+# vercel
+.vercel
 
-# User-specific files
-.DS_Store
-Thumbs.db
+# typescript
+*.tsbuildinfo
+next-env.d.ts
 
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Optional stylelint cache
-.stylelintcache
-
-# Output of storybook build
-/storybook-static
-
-# Environment variables not to be committed
-*.env
-
-# Optional Prettier cache
-.prettiercache 
+/src/generated/prisma
+paperback-covers-backup/
