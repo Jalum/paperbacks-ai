@@ -19,14 +19,16 @@ declare module 'next-auth' {
 // Production deployments accessed via deployment URL should still work
 const isPreviewDeployment = process.env.VERCEL_ENV === 'preview';
 
-// Debug logging for auth configuration
-console.log('Auth Debug:', {
-  VERCEL_ENV: process.env.VERCEL_ENV,
-  VERCEL_URL: process.env.VERCEL_URL,
-  isPreviewDeployment,
-  hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
-  hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-});
+// Debug logging for auth configuration (only in development)
+if (process.env.NODE_ENV === 'development') {
+  console.log('Auth Debug:', {
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    VERCEL_URL: process.env.VERCEL_URL,
+    isPreviewDeployment,
+    hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
+    hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+  });
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),

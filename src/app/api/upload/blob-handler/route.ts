@@ -26,14 +26,20 @@ export async function POST(request: NextRequest) {
         console.log('Generating upload token for:', pathname);
         
         // Validate file path includes user email for security
+        let validatedPathname = pathname;
         const userPath = `covers/${session.user.email}/`;
         if (!pathname.startsWith(userPath)) {
           // Update pathname to include user email for security
           const filename = pathname.split('/').pop();
-          return `${userPath}${filename}`;
+          validatedPathname = `${userPath}${filename}`;
         }
         
-        return pathname;
+        return {
+          allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+          maximumSizeInBytes: 10 * 1024 * 1024, // 10MB
+          validUntil: Date.now() + 1000 * 60 * 10, // 10 minutes
+          pathname: validatedPathname,
+        };
       },
       onUploadCompleted: async ({ blob }) => {
         console.log('Blob upload completed:', blob.url);

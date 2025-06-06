@@ -23,16 +23,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Increase body size limit for file uploads
-  experimental: {
-    serverComponentsExternalPackages: ['sharp'],
-  },
-  // API route configuration
-  api: {
-    bodyParser: {
-      sizeLimit: '15mb', // Increase from default 1mb to handle larger images
-    },
-  },
+  // Server external packages for better performance
+  serverExternalPackages: ['sharp'],
 };
 
 export default nextConfig;
