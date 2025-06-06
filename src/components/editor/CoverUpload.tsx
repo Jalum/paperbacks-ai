@@ -3,8 +3,9 @@ import { useDropzone, FileWithPath, FileRejection } from 'react-dropzone';
 import { useProjectStore } from '@/lib/store';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
+import { upload } from '@vercel/blob/client';
 
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB - can be larger with direct blob upload
 const ACCEPTED_FILES = {
   'image/jpeg': [],
   'image/png': [],
@@ -26,19 +27,28 @@ export default function CoverUpload() {
     console.log('Response headers:', response.headers.get('content-type'));
     if (!response.ok) {
       let errorMessage = 'Upload failed';
-      try {
-        const errorData = await response.json();
-        console.error('Upload failed:', errorData);
-        errorMessage = errorData.error || 'Upload failed';
-      } catch (parseError) {
-        // If we can't parse the error response as JSON, try to get the text
-        console.error('Failed to parse error response as JSON:', parseError);
+      
+      // Handle specific HTTP status codes
+      if (response.status === 413) {
+        errorMessage = 'File too large for upload. Please try a smaller file (max 5-6MB recommended).';
+      } else if (response.status === 504 || response.status === 524) {
+        errorMessage = 'Upload timed out. Please try a smaller file.';
+      } else {
+        // Try to get error details from response
         try {
-          const errorText = await response.text();
-          console.error('Error response text:', errorText);
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const errorData = await response.json();
+            console.error('Upload failed:', errorData);
+            errorMessage = errorData.error || `Upload failed: ${response.status} ${response.statusText}`;
+          } else {
+            const errorText = await response.text();
+            console.error('Error response text:', errorText);
+            errorMessage = `Upload failed: ${response.status} ${response.statusText}`;
+          }
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
           errorMessage = `Upload failed: ${response.status} ${response.statusText}`;
-        } catch (textError) {
-          console.error('Failed to read error response as text:', textError);
         }
       }
       throw new Error(errorMessage);
@@ -63,16 +73,111 @@ export default function CoverUpload() {
     return data.url;
   }, []);
 
+  const compressImage = useCallback(async (file: File): Promise<File> => {
+    // If file is already under limit, return as-is
+    if (file.size <= MAX_SIZE) {
+      return file;
+    }
+
+    console.log('Compressing image from', (file.size / 1024 / 1024).toFixed(1), 'MB');
+    
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Calculate new dimensions to reduce file size
+        let { width, height } = img;
+        const maxDimension = 2000; // Reasonable max for book covers
+        
+        if (width > maxDimension || height > maxDimension) {
+          const scale = maxDimension / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw and compress
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            console.log('Compressed to', (compressedFile.size / 1024 / 1024).toFixed(1), 'MB');
+            resolve(compressedFile);
+          } else {
+            reject(new Error('Failed to compress image'));
+          }
+        }, 'image/jpeg', 0.85); // 85% quality
+      };
+      
+      img.onerror = () => reject(new Error('Failed to load image for compression'));
+      img.src = URL.createObjectURL(file);
+    });
+  }, []);
+
   const uploadToBlob = useCallback(async (file: File): Promise<string> => {
     console.log('Starting upload for file:', file.name, 'Size:', file.size, 'Type:', file.type);
     
-    // Check file size before uploading
-    if (file.size > MAX_SIZE) {
-      throw new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is ${MAX_SIZE / 1024 / 1024}MB.`);
+    // Check if we should use direct blob upload (production) or fallback (development)
+    // In production, we'll try direct upload first and fallback if it fails
+    const shouldTryDirectUpload = true; // Always try direct upload first
+    
+    if (shouldTryDirectUpload) {
+      // Try direct Vercel Blob upload first (bypasses 4.5MB limit)
+      console.log('Attempting direct Vercel Blob upload');
+      
+      // Generate unique filename
+      const timestamp = Date.now();
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const filename = `covers/${timestamp}.${fileExtension}`;
+      
+      try {
+        const blob = await upload(filename, file, {
+          access: 'public',
+          handleUploadUrl: '/api/upload/blob-handler',
+        });
+        
+        console.log('Direct blob upload successful:', blob.url);
+        
+        // Still save metadata to database
+        await fetch('/api/upload/metadata', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: blob.pathname,
+            url: blob.url,
+            originalName: file.name,
+            contentType: file.type,
+            size: file.size,
+          }),
+        });
+        
+        return blob.url;
+      } catch (error) {
+        console.error('Direct blob upload failed, falling back to compressed upload:', error);
+        // Fall through to compression method below
+      }
+    }
+    
+    console.log('Using fallback upload with compression');
+    
+    // Compress if needed
+    const processedFile = await compressImage(file);
+    
+    // Final size check after compression
+    if (processedFile.size > MAX_SIZE) {
+      throw new Error(`File still too large after compression (${(processedFile.size / 1024 / 1024).toFixed(1)}MB). Please try a smaller or lower resolution image.`);
     }
     
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', processedFile);
 
     console.log('Sending request to /api/upload');
     
@@ -96,7 +201,7 @@ export default function CoverUpload() {
       }
       throw error;
     }
-  }, [handleResponse]);
+  }, [handleResponse, compressImage]);
 
   const onDrop = useCallback(
     async (acceptedFiles: FileWithPath[], rejectedFiles: FileRejection[]) => {
