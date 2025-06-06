@@ -43,8 +43,18 @@ const initialDesignData: DesignData = {
   backCoverFont: 'Arial, sans-serif',
   backCoverFontSize: 10,
   backCoverTextColor: '#000000',
+  backCoverTextAlign: 'left',
   backCoverAIPrompt: '',
   backCoverAIImageURL: '',
+  // Blurb box defaults
+  backCoverBlurbEnableBox: true,
+  backCoverBlurbBoxLeftMarginPercent: 10, // 10% margin on left and right
+  backCoverBlurbBoxYOffsetPercent: 10,
+  backCoverBlurbBoxHeightPercent: 30,
+  backCoverBlurbBoxFillColor: '#FFFFFF',
+  backCoverBlurbBoxCornerRadius: 20,
+  backCoverBlurbBoxPadding: 15,
+  backCoverBlurbBoxOpacity: 0.9,
 };
 
 export const useProjectStore = create<ProjectState>((set, get) => ({

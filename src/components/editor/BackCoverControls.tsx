@@ -23,6 +23,10 @@ export default function BackCoverControls() {
   const { designData, setDesignData, bookDetails } = useProjectStore();
   const { data: session } = useSession();
   
+  // Local state for inputs that need validation to prevent clamping while typing
+  const [localHeightPercent, setLocalHeightPercent] = useState<string>('');
+  const [localYOffsetPercent, setLocalYOffsetPercent] = useState<string>('');
+  
   // State for the AI prompt generation process
   const [aiPromptInputs, setAiPromptInputs] = useState({
     motifs: '',
@@ -82,6 +86,12 @@ export default function BackCoverControls() {
     };
   }, [targetDimensions]);
 
+  // Sync local state with store values when they change externally
+  useEffect(() => {
+    setLocalHeightPercent((designData.backCoverBlurbBoxHeightPercent || 30).toString());
+    setLocalYOffsetPercent((designData.backCoverBlurbBoxYOffsetPercent || 10).toString());
+  }, [designData.backCoverBlurbBoxHeightPercent, designData.backCoverBlurbBoxYOffsetPercent, bookDetails.trimSize]);
+
   const handleAIInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setAiPromptInputs(prev => ({ ...prev, [name]: value }));
@@ -89,8 +99,19 @@ export default function BackCoverControls() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    
+    // Handle special percentage inputs with local state to prevent clamping while typing
+    if (name === 'backCoverBlurbBoxHeightPercent') {
+      setLocalHeightPercent(value);
+      return;
+    }
+    if (name === 'backCoverBlurbBoxYOffsetPercent') {
+      setLocalYOffsetPercent(value);
+      return;
+    }
+    
+    // Handle all other inputs normally
     let processedValue: string | number = value;
-
     if (type === 'number') {
       processedValue = parseFloat(value);
     }
@@ -104,8 +125,9 @@ export default function BackCoverControls() {
 
     // Only validate Y-axis constraints for blurb box height and Y offset when focus is lost
     if (name === 'backCoverBlurbBoxHeightPercent' || name === 'backCoverBlurbBoxYOffsetPercent') {
-      const currentHeight = designData.backCoverBlurbBoxHeightPercent || 30;
-      const currentYOffset = designData.backCoverBlurbBoxYOffsetPercent || 10;
+      // Use local state values for accurate calculation
+      const currentHeight = name === 'backCoverBlurbBoxHeightPercent' ? processedValue : parseFloat(localHeightPercent);
+      const currentYOffset = name === 'backCoverBlurbBoxYOffsetPercent' ? processedValue : parseFloat(localYOffsetPercent);
       
       const proposedHeight = name === 'backCoverBlurbBoxHeightPercent' ? processedValue : currentHeight;
       const proposedYOffset = name === 'backCoverBlurbBoxYOffsetPercent' ? processedValue : currentYOffset;
@@ -121,6 +143,8 @@ export default function BackCoverControls() {
               break;
             }
           }
+          // Update local state to reflect the clamped value
+          setLocalHeightPercent(processedValue.toString());
         } else {
           // Reduce Y offset until safe (can go negative)
           for (let testYOffset = processedValue; testYOffset >= -50; testYOffset -= 1) {
@@ -129,17 +153,19 @@ export default function BackCoverControls() {
               break;
             }
           }
-        }
-        
-        // Update the value if it was adjusted
-        if (processedValue !== parseFloat(value)) {
-          setDesignData({ [name]: processedValue } as Partial<DesignData>);
+          // Update local state to reflect the clamped value
+          setLocalYOffsetPercent(processedValue.toString());
         }
       }
+      
+      // Always update the store with the final value (clamped or original)
+      setDesignData({ [name]: processedValue } as Partial<DesignData>);
     }
   };
 
   // Effect to fix existing values when book size changes (Y-axis only)
+  // Only triggers when book trim size changes, not when user types in input fields
+  // ESLint warning about missing dependencies is intentional - we don't want this to trigger during typing
   useEffect(() => {
     if (designData.backCoverBlurbEnableBox) {
       const currentHeight = designData.backCoverBlurbBoxHeightPercent || 30;
@@ -178,7 +204,8 @@ export default function BackCoverControls() {
         }
       }
     }
-  }, [barcodeConstraints.wouldExtendIntoSafetyZone, designData.backCoverBlurbEnableBox, setDesignData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookDetails.trimSize, designData.backCoverBlurbEnableBox]); // Only trigger on book size changes, not field changes
 
   // Directly use designData from store, with fallbacks for potentially undefined values if necessary
   // Our initialDesignData in store.ts should provide these defaults now.
@@ -620,6 +647,21 @@ export default function BackCoverControls() {
               className="mt-1 block w-full h-8 px-1 py-1 border border-gray-300 rounded-md shadow-sm"
             />
           </div>
+          <div>
+            <label htmlFor="backCoverTextAlign" className="block text-xs font-medium text-gray-600">Text Alignment</label>
+            <select
+              id="backCoverTextAlign"
+              name="backCoverTextAlign"
+              value={designData.backCoverTextAlign || 'left'}
+              onChange={handleChange}
+              className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-xs focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+              <option value="justify">Justify</option>
+            </select>
+          </div>
         </div>
       </fieldset>
 
@@ -694,26 +736,22 @@ export default function BackCoverControls() {
                   />
                 </div>
               </div>
-              <p className="text-xs text-gray-500 col-span-2">Position and Size (as % of Back Cover Trim Area):</p>
+              <p className="text-xs text-gray-500 col-span-2">Position and Size (centered horizontally with fixed margins):</p>
               <p className="text-xs text-amber-600 col-span-2">⚠️ Blurb box cannot extend below {barcodeConstraints.maxSafeVerticalPercent}% to protect barcode area</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="backCoverBlurbBoxXOffsetPercent" className="block text-xs font-medium text-gray-600">X Offset (%) - Negative moves toward left</label>
-                  <input type="number" id="backCoverBlurbBoxXOffsetPercent" name="backCoverBlurbBoxXOffsetPercent" value={designData.backCoverBlurbBoxXOffsetPercent || 10} onChange={handleChange} min="-50" max="100" step="1" className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-xs" />
+                  <label htmlFor="backCoverBlurbBoxLeftMarginPercent" className="block text-xs font-medium text-gray-600">Left/Right Margin (%)</label>
+                  <input type="number" id="backCoverBlurbBoxLeftMarginPercent" name="backCoverBlurbBoxLeftMarginPercent" value={designData.backCoverBlurbBoxLeftMarginPercent || 10} onChange={handleChange} min="5" max="30" step="1" className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-xs" />
                 </div>
                 <div>
                   <label htmlFor="backCoverBlurbBoxYOffsetPercent" className="block text-xs font-medium text-gray-600">Y Offset (%) - Negative moves toward top</label>
-                  <input type="number" id="backCoverBlurbBoxYOffsetPercent" name="backCoverBlurbBoxYOffsetPercent" value={designData.backCoverBlurbBoxYOffsetPercent || 10} onChange={handleChange} onBlur={handleBlur} min="-50" max="100" step="1" className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-xs" />
+                  <input type="number" id="backCoverBlurbBoxYOffsetPercent" name="backCoverBlurbBoxYOffsetPercent" value={localYOffsetPercent} onChange={handleChange} onBlur={handleBlur} min="-50" max="100" step="1" className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-xs" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="backCoverBlurbBoxWidthPercent" className="block text-xs font-medium text-gray-600">Width (%)</label>
-                  <input type="number" id="backCoverBlurbBoxWidthPercent" name="backCoverBlurbBoxWidthPercent" value={designData.backCoverBlurbBoxWidthPercent || 80} onChange={handleChange} min="10" max="100" step="1" className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-xs" />
-                </div>
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label htmlFor="backCoverBlurbBoxHeightPercent" className="block text-xs font-medium text-gray-600">Height (%)</label>
-                  <input type="number" id="backCoverBlurbBoxHeightPercent" name="backCoverBlurbBoxHeightPercent" value={designData.backCoverBlurbBoxHeightPercent || 30} onChange={handleChange} onBlur={handleBlur} min="10" max="100" step="1" className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-xs" />
+                  <input type="number" id="backCoverBlurbBoxHeightPercent" name="backCoverBlurbBoxHeightPercent" value={localHeightPercent} onChange={handleChange} onBlur={handleBlur} min="10" max="100" step="1" className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-xs" />
                 </div>
               </div>
             </>

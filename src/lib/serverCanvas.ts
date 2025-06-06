@@ -1,6 +1,7 @@
 import { createCanvas, loadImage, CanvasRenderingContext2D, Canvas } from 'canvas'
 import { BookDetails, DesignData } from '@/types'
 import sharp from 'sharp'
+import { registerGoogleFont, getCanvasFontFamily, initializeRequiredFonts } from './fontManager'
 
 interface ServerRenderOptions {
   bookDetails: BookDetails
@@ -25,6 +26,41 @@ interface CanvasDimensions {
 
 export async function generateCoverCanvas(options: ServerRenderOptions): Promise<Buffer> {
   const { bookDetails, designData, coverImageUrl, aiBackImageUrl, dpi } = options
+  
+  // Initialize fonts before canvas operations
+  await initializeRequiredFonts();
+  
+  // Register specific fonts used in this design with multiple weights
+  const fontsToRegister = new Set<string>();
+  
+  if (designData.spineFont) {
+    const spineFontFamily = getCanvasFontFamily(designData.spineFont);
+    if (spineFontFamily !== 'Arial' && spineFontFamily !== 'Times New Roman' && spineFontFamily !== 'Georgia' && spineFontFamily !== 'Verdana' && spineFontFamily !== 'Courier New') {
+      fontsToRegister.add(spineFontFamily);
+    }
+  }
+  
+  if (designData.backCoverFont) {
+    const backCoverFontFamily = getCanvasFontFamily(designData.backCoverFont);
+    if (backCoverFontFamily !== 'Arial' && backCoverFontFamily !== 'Times New Roman' && backCoverFontFamily !== 'Georgia' && backCoverFontFamily !== 'Verdana' && backCoverFontFamily !== 'Courier New') {
+      fontsToRegister.add(backCoverFontFamily);
+    }
+  }
+  
+  // Register each unique font with common weights
+  const fontRegistrationPromises = Array.from(fontsToRegister).map(async (fontFamily) => {
+    try {
+      await Promise.all([
+        registerGoogleFont(fontFamily, '400'),
+        registerGoogleFont(fontFamily, '600'),
+        registerGoogleFont(fontFamily, '700')
+      ]);
+    } catch (error) {
+      console.warn(`Failed to register some weights for ${fontFamily}:`, error);
+    }
+  });
+  
+  await Promise.all(fontRegistrationPromises);
   
   // Calculate dimensions (same logic as client)
   const dimensions = calculateDimensions(bookDetails, dpi)
@@ -134,24 +170,116 @@ function calculateSpineWidthMM(pageCount: number, paperType: string): number {
   return spineWidthInches * 25.4 // Convert to mm
 }
 
-// Helper function to wrap text like the client
-function wrapText(context: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
-  const words = text.split(' ')
-  let line = ''
-  for (let n = 0; n < words.length; n++) {
-    const testLine = line + words[n] + ' '
-    const metrics = context.measureText(testLine)
-    const testWidth = metrics.width
-    if (testWidth > maxWidth && n > 0) {
-      context.fillText(line, x, y)
-      line = words[n] + ' '
-      y += lineHeight
-    } else {
-      line = testLine
+// Enhanced text wrapping function with alignment and line break support
+function wrapTextWithAlignment(
+  context: CanvasRenderingContext2D, 
+  text: string, 
+  x: number, 
+  y: number, 
+  maxWidth: number, 
+  lineHeight: number,
+  alignment: 'left' | 'center' | 'right' | 'justify' = 'left'
+) {
+  // Split by manual line breaks first
+  const paragraphs = text.split(/\r?\n/)
+  let currentY = y
+  
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    if (paragraph.trim() === '') {
+      // Empty line - add spacing
+      currentY += lineHeight
+      return
     }
-  }
-  context.fillText(line, x, y)
+    
+    const words = paragraph.split(' ').filter(word => word.length > 0)
+    if (words.length === 0) return
+    
+    const lines: string[] = []
+    let currentLine = ''
+    
+    // Build lines for this paragraph
+    for (let i = 0; i < words.length; i++) {
+      const testLine = currentLine + (currentLine ? ' ' : '') + words[i]
+      const metrics = context.measureText(testLine)
+      
+      if (metrics.width > maxWidth && currentLine) {
+        lines.push(currentLine)
+        currentLine = words[i]
+      } else {
+        currentLine = testLine
+      }
+    }
+    
+    if (currentLine) {
+      lines.push(currentLine)
+    }
+    
+    // Draw lines with alignment
+    lines.forEach((line, lineIndex) => {
+      const isLastLineOfParagraph = lineIndex === lines.length - 1
+      
+      let lineX = x
+      
+      switch (alignment) {
+        case 'center':
+          const centerWidth = context.measureText(line).width
+          lineX = x + (maxWidth - centerWidth) / 2
+          break
+          
+        case 'right':
+          const rightWidth = context.measureText(line).width
+          lineX = x + maxWidth - rightWidth
+          break
+          
+        case 'justify':
+          // Don't justify the last line of a paragraph or single-word lines
+          if (!isLastLineOfParagraph && line.includes(' ')) {
+            drawJustifiedLine(context, line, x, currentY, maxWidth)
+            currentY += lineHeight
+            return
+          }
+          // Fall through to left alignment for last lines
+          break
+          
+        case 'left':
+        default:
+          lineX = x
+          break
+      }
+      
+      context.fillText(line, lineX, currentY)
+      currentY += lineHeight
+    })
+    
+    // Add extra space between paragraphs (except after the last one)
+    if (paragraphIndex < paragraphs.length - 1) {
+      currentY += lineHeight * 0.5 // Half line spacing between paragraphs
+    }
+  })
 }
+
+// Helper function for justified text
+function drawJustifiedLine(context: CanvasRenderingContext2D, line: string, x: number, y: number, maxWidth: number) {
+  const words = line.split(' ')
+  if (words.length <= 1) {
+    context.fillText(line, x, y)
+    return
+  }
+  
+  const totalWordsWidth = words.reduce((total, word) => total + context.measureText(word).width, 0)
+  const totalSpaceWidth = maxWidth - totalWordsWidth
+  const spaceWidth = totalSpaceWidth / (words.length - 1)
+  
+  let currentX = x
+  words.forEach((word, index) => {
+    context.fillText(word, currentX, y)
+    currentX += context.measureText(word).width
+    if (index < words.length - 1) {
+      currentX += spaceWidth
+    }
+  })
+}
+
 
 // Unified drawing function that matches the client preview exactly
 async function drawCoverUnified(
@@ -304,7 +432,7 @@ async function drawCoverUnified(
   // Back Cover Text - exact client logic
   if (currentDesignData.backCoverBlurbEnableBox) {
     const text = currentDesignData.backCoverText
-    const font = currentDesignData.backCoverFont || 'Arial'
+    const font = getCanvasFontFamily(currentDesignData.backCoverFont)
     let fontSize = currentDesignData.backCoverFontSize || 10
     if (exportTargetDPI) fontSize *= scaleFactor
     const textColor = currentDesignData.backCoverTextColor || '#000000'
@@ -312,9 +440,8 @@ async function drawCoverUnified(
     const boxOpacity = currentDesignData.backCoverBlurbBoxOpacity === undefined ? 1 : currentDesignData.backCoverBlurbBoxOpacity
     const cornerRadius = currentDesignData.backCoverBlurbBoxCornerRadius || 20
     const padding = currentDesignData.backCoverBlurbBoxPadding || 15
-    const widthPercentage = currentDesignData.backCoverBlurbBoxWidthPercent || 80
+    const leftMarginPercent = currentDesignData.backCoverBlurbBoxLeftMarginPercent || 10
     const heightPercentage = currentDesignData.backCoverBlurbBoxHeightPercent || 30
-    const offsetXPercentage = currentDesignData.backCoverBlurbBoxXOffsetPercent || 10
     const offsetYPercentage = currentDesignData.backCoverBlurbBoxYOffsetPercent || 10
 
     const blurbRelativeToTrimX = bleedPx
@@ -322,13 +449,18 @@ async function drawCoverUnified(
     const blurbAreaWidth = backCoverWidthPx_trim
     const blurbAreaHeight = coverHeightPx_trim
 
-    const boxWidth = blurbAreaWidth * (widthPercentage / 100)
+    // Calculate width based on margins (same margin on left and right)
+    const leftMarginPx = blurbAreaWidth * (leftMarginPercent / 100)
+    const rightMarginPx = leftMarginPx // Same margin on both sides
+    const boxWidth = blurbAreaWidth - leftMarginPx - rightMarginPx
     const boxHeight = blurbAreaHeight * (heightPercentage / 100)
-    const blurbAreaCenterX = blurbRelativeToTrimX + blurbAreaWidth / 2
+    
+    // Center horizontally with equal margins
+    const boxX = blurbRelativeToTrimX + leftMarginPx
+    
+    // Vertical positioning (keep existing Y offset logic)
     const blurbAreaCenterY = blurbRelativeToTrimY + blurbAreaHeight / 2
-    const boxCenterX = blurbAreaCenterX + (blurbAreaWidth / 2) * (offsetXPercentage / 100)
     const boxCenterY = blurbAreaCenterY + (blurbAreaHeight / 2) * (offsetYPercentage / 100)
-    const boxX = boxCenterX - boxWidth / 2
     const boxY = boxCenterY - boxHeight / 2
 
     currentCtx.save()
@@ -354,12 +486,13 @@ async function drawCoverUnified(
       const textDrawAreaX = boxX + padding
       const textDrawAreaY = boxY + padding
       const textDrawAreaWidth = boxWidth - (2 * padding)
-      wrapText(currentCtx, text, textDrawAreaX, textDrawAreaY, textDrawAreaWidth, fontSize * 1.2)
+      const alignment = currentDesignData.backCoverTextAlign || 'left'
+      wrapTextWithAlignment(currentCtx, text, textDrawAreaX, textDrawAreaY, textDrawAreaWidth, fontSize * 1.2, alignment)
     }
     currentCtx.restore()
   } else if (currentDesignData.backCoverText) {
     const text = currentDesignData.backCoverText
-    const font = currentDesignData.backCoverFont || 'Arial'
+    const font = getCanvasFontFamily(currentDesignData.backCoverFont)
     let fontSize = currentDesignData.backCoverFontSize || 10
     if (exportTargetDPI) fontSize *= scaleFactor
     const textColor = currentDesignData.backCoverTextColor || '#000000'
@@ -368,7 +501,8 @@ async function drawCoverUnified(
     currentCtx.font = `${fontSize}px ${font}`
     currentCtx.textAlign = 'left'
     currentCtx.textBaseline = 'top'
-    wrapText(currentCtx, text, bleedPx + paddingValue, bleedPx + paddingValue, backCoverWidthPx_trim - (2*paddingValue), fontSize * 1.2)
+    const alignment = currentDesignData.backCoverTextAlign || 'left'
+    wrapTextWithAlignment(currentCtx, text, bleedPx + paddingValue, bleedPx + paddingValue, backCoverWidthPx_trim - (2*paddingValue), fontSize * 1.2, alignment)
   }
 
   // 2. Spine Panel
@@ -405,7 +539,9 @@ async function drawCoverUnified(
     currentCtx.clip()
 
     const spineTextColor = currentDesignData.spineColor || '#000000'
-    const spineFont = currentDesignData.spineFont || 'Arial'
+    const originalSpineFont = currentDesignData.spineFont
+    const spineFont = getCanvasFontFamily(currentDesignData.spineFont)
+    console.log('Server spine font mapping:', { originalSpineFont, mappedSpineFont: spineFont })
     let spineFontSize = currentDesignData.spineFontSize || 12
     if (exportTargetDPI) spineFontSize *= scaleFactor
     

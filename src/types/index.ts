@@ -34,16 +34,18 @@ export interface DesignData {
   backCoverBlurbBoxFillColor?: string;
   backCoverBlurbBoxCornerRadius?: number;
   backCoverBlurbBoxPadding?: number; // Inner padding for text
-  backCoverBlurbBoxXOffsetPercent?: number; // Position from top-left of back cover trim
+  backCoverBlurbBoxXOffsetPercent?: number; // Position from top-left of back cover trim (deprecated)
   backCoverBlurbBoxYOffsetPercent?: number;
-  backCoverBlurbBoxWidthPercent?: number;   // Size as % of back cover trim
+  backCoverBlurbBoxWidthPercent?: number;   // Size as % of back cover trim (deprecated)
   backCoverBlurbBoxHeightPercent?: number;
+  backCoverBlurbBoxLeftMarginPercent?: number; // Left/right margin as % of back cover width
   backCoverBlurbBoxOpacity?: number; // 0-1
 
   backCoverText: string;
   backCoverFont?: string;
   backCoverFontSize?: number;
   backCoverTextColor?: string;
+  backCoverTextAlign?: 'left' | 'center' | 'right' | 'justify'; // Text alignment for back cover blurb
   // ... more design properties
 }
 

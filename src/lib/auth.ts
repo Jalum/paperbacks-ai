@@ -17,11 +17,19 @@ declare module 'next-auth' {
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
+    // Only enable OAuth on production and localhost
+    ...(process.env.NODE_ENV === 'development' || 
+        process.env.VERCEL_ENV === 'production' ? [
+      GoogleProvider({
+        clientId: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      }),
+    ] : []),
   ],
+  // Use redirect proxy for preview deployments
+  ...(process.env.AUTH_REDIRECT_PROXY_URL && {
+    redirectProxyUrl: process.env.AUTH_REDIRECT_PROXY_URL,
+  }),
   callbacks: {
     session: async ({ session, token }) => {
       if (session?.user && token?.sub) {
