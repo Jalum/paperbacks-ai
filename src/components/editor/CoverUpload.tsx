@@ -21,21 +21,9 @@ export default function CoverUpload() {
   // Initialize ColorThief instance - uncomment when ready to use
   // const colorThief = new ColorThief();
 
-  const uploadToBlob = async (file: File): Promise<string> => {
-    console.log('Starting upload for file:', file.name, 'Size:', file.size, 'Type:', file.type);
-    
-    const formData = new FormData();
-    formData.append('file', file);
-
-    console.log('Sending request to /api/upload');
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
-
+  const handleResponse = useCallback(async (response: Response): Promise<string> => {
     console.log('Response status:', response.status);
     console.log('Response headers:', response.headers.get('content-type'));
-    
     if (!response.ok) {
       let errorMessage = 'Upload failed';
       try {
@@ -73,7 +61,42 @@ export default function CoverUpload() {
     }
     
     return data.url;
-  };
+  }, []);
+
+  const uploadToBlob = useCallback(async (file: File): Promise<string> => {
+    console.log('Starting upload for file:', file.name, 'Size:', file.size, 'Type:', file.type);
+    
+    // Check file size before uploading
+    if (file.size > MAX_SIZE) {
+      throw new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is ${MAX_SIZE / 1024 / 1024}MB.`);
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+
+    console.log('Sending request to /api/upload');
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+    
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      return await handleResponse(response);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Upload timed out. Please try with a smaller file or check your connection.');
+      }
+      throw error;
+    }
+  }, [handleResponse]);
 
   const onDrop = useCallback(
     async (acceptedFiles: FileWithPath[], rejectedFiles: FileRejection[]) => {
@@ -121,7 +144,17 @@ export default function CoverUpload() {
           
         } catch (error) {
           console.error('Upload error:', error);
-          setError(error instanceof Error ? error.message : 'Upload failed');
+          let errorMessage = 'Upload failed';
+          if (error instanceof Error) {
+            errorMessage = error.message;
+            // Provide specific guidance for common issues
+            if (error.message.includes('timeout')) {
+              errorMessage = `${error.message} Large files may take longer to process.`;
+            } else if (error.message.includes('too large')) {
+              errorMessage = `${error.message} Try compressing your image or choosing a smaller file.`;
+            }
+          }
+          setError(errorMessage);
           setCoverImage('');
           if (previewUrl && previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
           setPreviewUrl(null);
@@ -130,7 +163,7 @@ export default function CoverUpload() {
         }
       }
     },
-    [setCoverImage, previewUrl, session] 
+    [setCoverImage, previewUrl, session, uploadToBlob] 
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

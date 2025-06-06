@@ -8,6 +8,10 @@ import prisma from '@/lib/prisma'
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
+// Configure route segment for larger payloads
+export const runtime = 'nodejs'
+export const maxDuration = 30 // 30 seconds for file processing
+
 export async function POST(request: NextRequest) {
   try {
     console.log('Upload request received')
