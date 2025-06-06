@@ -766,7 +766,7 @@ export default function CoverPreview() {
       // The `currentFrontCoverObjectUrl` (which was the `newObjectUrl` of a previous run)
       // would have already been revoked at the start of this effect run if it was a blob.
     };
-  }, [coverImage]); // Removed currentFrontCoverObjectUrl from dependencies to prevent loop
+  }, [coverImage, currentFrontCoverObjectUrl]); // Include currentFrontCoverObjectUrl to satisfy ESLint
 
   useEffect(() => {
     const aiImageUrl = designData.backCoverAIImageURL;

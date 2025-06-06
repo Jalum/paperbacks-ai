@@ -23,7 +23,7 @@ export default function PreviewNotice() {
           </h3>
           <div className="mt-2 text-sm text-yellow-700">
             <p>
-              You're viewing a preview deployment. Authentication is disabled on preview deployments. 
+              You&apos;re viewing a preview deployment. Authentication is disabled on preview deployments. 
               Please visit the <strong>production domain</strong> to sign in and use all features.
             </p>
           </div>
