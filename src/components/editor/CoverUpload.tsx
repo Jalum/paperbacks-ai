@@ -34,15 +34,44 @@ export default function CoverUpload() {
     });
 
     console.log('Response status:', response.status);
+    console.log('Response headers:', response.headers.get('content-type'));
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Upload failed:', errorData);
-      throw new Error(errorData.error || 'Upload failed');
+      let errorMessage = 'Upload failed';
+      try {
+        const errorData = await response.json();
+        console.error('Upload failed:', errorData);
+        errorMessage = errorData.error || 'Upload failed';
+      } catch (parseError) {
+        // If we can't parse the error response as JSON, try to get the text
+        console.error('Failed to parse error response as JSON:', parseError);
+        try {
+          const errorText = await response.text();
+          console.error('Error response text:', errorText);
+          errorMessage = `Upload failed: ${response.status} ${response.statusText}`;
+        } catch (textError) {
+          console.error('Failed to read error response as text:', textError);
+        }
+      }
+      throw new Error(errorMessage);
     }
 
-    const data = await response.json();
-    console.log('Upload successful:', data);
+    let data;
+    try {
+      data = await response.json();
+      console.log('Upload successful:', data);
+    } catch (parseError) {
+      console.error('Failed to parse success response as JSON:', parseError);
+      try {
+        const responseText = await response.text();
+        console.error('Response text:', responseText);
+        throw new Error('Server returned invalid JSON response');
+      } catch (textError) {
+        console.error('Failed to read response as text:', textError);
+        throw new Error('Failed to read server response');
+      }
+    }
+    
     return data.url;
   };
 

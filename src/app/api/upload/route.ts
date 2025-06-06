@@ -85,14 +85,25 @@ export async function POST(request: NextRequest) {
     // Upload to Vercel Blob (with fallback for development)
     let blob;
     
+    console.log('Uploading to storage...')
+    console.log('BLOB_READ_WRITE_TOKEN available:', !!process.env.BLOB_READ_WRITE_TOKEN)
+    
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       // Production: Use Vercel Blob
-      blob = await put(filename, processedBuffer, {
-        access: 'public',
-        contentType: 'image/jpeg',
-      });
+      console.log('Using Vercel Blob storage')
+      try {
+        blob = await put(filename, processedBuffer, {
+          access: 'public',
+          contentType: 'image/jpeg',
+        });
+        console.log('Blob upload successful:', blob.url)
+      } catch (blobError) {
+        console.error('Blob upload failed:', blobError)
+        throw new Error(`Blob storage failed: ${blobError instanceof Error ? blobError.message : 'Unknown error'}`)
+      }
     } else {
       // Development fallback: Return base64 data URL
+      console.log('Using base64 fallback for development')
       const base64 = processedBuffer.toString('base64');
       blob = {
         url: `data:image/jpeg;base64,${base64}`,
@@ -104,9 +115,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user in database
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
+    console.log('Finding user in database...')
+    let user;
+    try {
+      user = await prisma.user.findUnique({
+        where: { email: session.user.email }
+      })
+      console.log('User found:', user ? 'Yes' : 'No')
+    } catch (dbError) {
+      console.error('Database query failed:', dbError)
+      throw new Error(`Database error: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`)
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -116,18 +135,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Save file metadata to database
-    const uploadedFile = await prisma.uploadedFile.create({
-      data: {
-        userId: user.id,
-        filename: filename,
-        url: blob.url,
-        originalName: file.name,
-        contentType: 'image/jpeg',
-        size: processedBuffer.length,
-        width: metadata.width || null,
-        height: metadata.height || null,
-      }
-    })
+    console.log('Saving file metadata to database...')
+    let uploadedFile;
+    try {
+      uploadedFile = await prisma.uploadedFile.create({
+        data: {
+          userId: user.id,
+          filename: filename,
+          url: blob.url,
+          originalName: file.name,
+          contentType: 'image/jpeg',
+          size: processedBuffer.length,
+          width: metadata.width || null,
+          height: metadata.height || null,
+        }
+      })
+      console.log('File metadata saved successfully')
+    } catch (dbError) {
+      console.error('Failed to save file metadata:', dbError)
+      throw new Error(`Database save failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`)
+    }
 
     return NextResponse.json({
       id: uploadedFile.id,
@@ -145,14 +172,34 @@ export async function POST(request: NextRequest) {
     
     // Provide more specific error details
     let errorMessage = 'Failed to upload file';
+    let statusCode = 500;
+    
     if (error instanceof Error) {
       errorMessage = error.message;
       console.error('Error details:', error.stack);
+      
+      // Handle specific error types
+      if (error.message.includes('Prisma')) {
+        errorMessage = 'Database connection error';
+        statusCode = 503;
+      } else if (error.message.includes('Sharp')) {
+        errorMessage = 'Image processing error';
+        statusCode = 422;
+      } else if (error.message.includes('Blob')) {
+        errorMessage = 'File storage error';
+        statusCode = 503;
+      }
     }
     
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
+    // Ensure we always return JSON
+    return new NextResponse(
+      JSON.stringify({ error: errorMessage, timestamp: new Date().toISOString() }),
+      { 
+        status: statusCode,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      }
     )
   }
 }
