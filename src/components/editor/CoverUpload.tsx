@@ -5,7 +5,8 @@ import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { upload } from '@vercel/blob/client';
 
-const MAX_SIZE = 4 * 1024 * 1024; // 4MB - conservative limit for fallback upload
+const MAX_SIZE_FALLBACK = 4 * 1024 * 1024; // 4MB - conservative limit for fallback upload
+const MAX_SIZE_DIRECT = 10 * 1024 * 1024; // 10MB - limit for direct blob upload
 const ACCEPTED_FILES = {
   'image/jpeg': [],
   'image/png': [],
@@ -123,7 +124,7 @@ export default function CoverUpload() {
               console.log('Compressed to', (compressedFile.size / 1024 / 1024).toFixed(1), 'MB', 'at quality', currentQuality);
               
               // If still too large and we can compress more, try again
-              if (compressedFile.size > MAX_SIZE && currentQuality > 0.5) {
+              if (compressedFile.size > MAX_SIZE_FALLBACK && currentQuality > 0.5) {
                 console.log('Still too large, trying lower quality...');
                 tryCompress(currentQuality - 0.1);
               } else {
@@ -152,6 +153,12 @@ export default function CoverUpload() {
     
     // Check if Vercel Blob is available - now that BLOB_READ_WRITE_TOKEN is configured
     const canUseVercelBlob = true; // Enabled with BLOB_READ_WRITE_TOKEN
+    
+    // Check file size - use higher limit if direct upload is available
+    const maxSize = canUseVercelBlob ? MAX_SIZE_DIRECT : MAX_SIZE_FALLBACK;
+    if (file.size > maxSize) {
+      throw new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is ${maxSize / 1024 / 1024}MB.`);
+    }
     
     if (shouldTryDirectUpload && canUseVercelBlob) {
       // Try direct Vercel Blob upload first (bypasses 4.5MB limit)
@@ -208,7 +215,7 @@ export default function CoverUpload() {
     const processedFile = await compressImage(file);
     
     // Final size check after compression
-    if (processedFile.size > MAX_SIZE) {
+    if (processedFile.size > MAX_SIZE_FALLBACK) {
       throw new Error(`File still too large after compression (${(processedFile.size / 1024 / 1024).toFixed(1)}MB). Please try a smaller or lower resolution image.`);
     }
     
@@ -246,7 +253,7 @@ export default function CoverUpload() {
       if (rejectedFiles && rejectedFiles.length > 0) {
         const firstError = rejectedFiles[0].errors[0];
         if (firstError.code === 'file-too-large') {
-          setError(`File is too large. Max size is ${MAX_SIZE / 1024 / 1024}MB.`);
+          setError(`File is too large. Max size is ${MAX_SIZE_DIRECT / 1024 / 1024}MB.`);
         } else if (firstError.code === 'file-invalid-type') {
           setError('Invalid file type. Please upload a JPG, PNG, or WEBP image.');
         } else {
@@ -310,7 +317,7 @@ export default function CoverUpload() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: ACCEPTED_FILES,
-    maxSize: MAX_SIZE,
+    maxSize: MAX_SIZE_DIRECT,
     multiple: false,
   });
 
@@ -338,7 +345,7 @@ export default function CoverUpload() {
         ) : isDragActive ? (
           <p className="text-center text-indigo-700">Drop the image here ...</p>
         ) : (
-          <p className="text-center text-gray-500">Drag & drop cover image here, or click to select (Large images auto-compressed, JPG/PNG/WEBP)</p>
+          <p className="text-center text-gray-500">Drag & drop cover image here, or click to select (Max 10MB, JPG/PNG/WEBP)</p>
         )}
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
