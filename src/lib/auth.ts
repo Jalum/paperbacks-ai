@@ -52,7 +52,7 @@ export const authOptions: NextAuthOptions = {
       }
       return token
     },
-    signIn: async ({ user, account, profile }) => {
+    signIn: async () => {
       // Allow sign in only if we have providers configured
       if (isPreviewDeployment) {
         console.log('Blocking sign in on preview deployment');
