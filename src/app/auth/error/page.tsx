@@ -17,8 +17,13 @@ function ErrorContent() {
       case 'Verification':
         return 'The verification token has expired or has already been used.';
       case 'Default':
-      default:
         return 'An error occurred during authentication.';
+      case null:
+      case undefined:
+      case '':
+        return 'Authentication failed. You may be on a preview deployment where authentication is disabled.';
+      default:
+        return `Authentication error: ${error}`;
     }
   };
 
@@ -32,6 +37,13 @@ function ErrorContent() {
           <p className="mt-2 text-center text-sm text-gray-600">
             {getErrorMessage(error)}
           </p>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 p-3 bg-gray-100 rounded text-xs text-gray-500">
+              <strong>Debug info:</strong><br />
+              Error: {error || 'undefined'}<br />
+              URL: {typeof window !== 'undefined' ? window.location.href : 'N/A'}
+            </div>
+          )}
         </div>
         
         <div className="mt-8 space-y-4">

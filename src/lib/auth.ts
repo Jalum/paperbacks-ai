@@ -18,8 +18,18 @@ declare module 'next-auth' {
 const isPreviewDeployment = process.env.VERCEL_ENV === 'preview' || 
   (process.env.VERCEL_URL && !process.env.VERCEL_URL.includes('paperbacks-ai-online-v3.vercel.app'));
 
+// Debug logging for auth configuration
+console.log('Auth Debug:', {
+  VERCEL_ENV: process.env.VERCEL_ENV,
+  VERCEL_URL: process.env.VERCEL_URL,
+  isPreviewDeployment,
+  hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
+  hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+});
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     // Only enable OAuth on production and localhost, NOT on preview deployments
     ...(!isPreviewDeployment ? [
@@ -41,6 +51,14 @@ export const authOptions: NextAuthOptions = {
         token.uid = user.id
       }
       return token
+    },
+    signIn: async ({ user, account, profile }) => {
+      // Allow sign in only if we have providers configured
+      if (isPreviewDeployment) {
+        console.log('Blocking sign in on preview deployment');
+        return false;
+      }
+      return true;
     },
   },
   session: {
