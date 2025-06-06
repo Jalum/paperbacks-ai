@@ -4,7 +4,7 @@ import { useProjectStore } from '@/lib/store';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 
-const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 const ACCEPTED_FILES = {
   'image/jpeg': [],
   'image/png': [],
@@ -135,7 +135,7 @@ export default function CoverUpload() {
         ) : isDragActive ? (
           <p className="text-center text-indigo-700">Drop the image here ...</p>
         ) : (
-          <p className="text-center text-gray-500">Drag & drop cover image here, or click to select (Max 5MB, JPG/PNG/WEBP)</p>
+          <p className="text-center text-gray-500">Drag & drop cover image here, or click to select (Max 10MB, JPG/PNG/WEBP)</p>
         )}
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
