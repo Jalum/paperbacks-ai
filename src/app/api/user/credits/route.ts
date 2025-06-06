@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
@@ -38,6 +38,49 @@ export async function GET() {
     console.error('Error fetching user credits:', error)
     return NextResponse.json(
       { error: 'Failed to fetch credits' },
+      { status: 500 }
+    )
+  }
+}
+
+// Development-only endpoint to reset credits for testing
+export async function POST(request: NextRequest) {
+  // Only allow in development or if explicitly enabled
+  if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_CREDIT_RESET) {
+    return NextResponse.json(
+      { error: 'Credit reset not available in production' },
+      { status: 403 }
+    )
+  }
+
+  try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const { credits } = await request.json()
+    const creditsToAdd = credits || 100 // Default to 100 credits
+
+    const user = await prisma.user.update({
+      where: { email: session.user.email },
+      data: { creditBalance: creditsToAdd },
+      select: { creditBalance: true }
+    })
+
+    return NextResponse.json({
+      message: `Credits reset to ${creditsToAdd}`,
+      newBalance: user.creditBalance
+    })
+
+  } catch (error) {
+    console.error('Error resetting credits:', error)
+    return NextResponse.json(
+      { error: 'Failed to reset credits' },
       { status: 500 }
     )
   }
