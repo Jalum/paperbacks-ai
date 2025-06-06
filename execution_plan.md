@@ -508,6 +508,42 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 **STATUS: POST-LAUNCH ENHANCEMENTS COMPLETE. Font rendering system ensures identical preview and export output. OAuth system handles all Vercel deployment scenarios gracefully. Text formatting system provides professional typography options with proper line break handling.**
 
+## Recent Enhancements and Bug Fixes (January 2025)
+
+### Auto-Sizing Blurb Box System
+**Completed:**
+-   **Intelligent Text Measurement:** Implemented text measurement system that calculates required dimensions based on font size, line height, and text content. **Completed**
+-   **Auto-Sizing Logic:** Blurb boxes automatically adjust height based on text content while maintaining user-defined width and padding settings. **Completed**
+-   **Balanced Layout:** Auto-sizing takes into account padding, line height, and font metrics to create properly spaced text layouts. **Completed**
+-   **Barcode Protection:** Auto-sizing respects barcode area constraints and adjusts positioning automatically to prevent overlap. **Completed**
+-   **UI Simplification:** Removed manual height controls from BackCoverControls since height is now automatically determined by text content. **Completed**
+
+### File Upload System Enhancements
+**Completed:**
+-   **Large File Support:** Implemented dual upload system with Vercel Blob direct uploads for files up to 10MB and compressed fallback for smaller files. **Completed**
+-   **Upload Limit Bypass:** Resolved Vercel's 4.5MB serverless function limit by implementing direct client-to-blob uploads that bypass the API routes entirely. **Completed**
+-   **Smart Compression:** Enhanced image compression algorithm with iterative quality reduction to fit within fallback limits while maintaining visual quality. **Completed**
+-   **Error Handling:** Comprehensive error handling with specific guidance for 413 errors, timeouts, and large file issues. **Completed**
+-   **Authentication Integration:** Direct blob uploads require authentication and include user-specific path organization for security. **Completed**
+
+### OAuth and Authentication Stability
+**Completed:**
+-   **Build Error Resolution:** Fixed ESLint errors with unescaped entities and missing React dependencies that prevented production builds. **Completed**
+-   **OAuth Debug Enhancement:** Improved preview deployment detection to only disable OAuth on explicit preview environments, not production deployments accessed via deployment URLs. **Completed**
+-   **Error Response Handling:** Enhanced OAuth error handling to provide clearer debugging information and prevent "error: undefined" messages. **Completed**
+-   **Production Deployment:** Verified OAuth functionality works correctly on stable production domain with proper redirect URI configuration. **Completed**
+
+### Technical Infrastructure Improvements
+**Completed:**
+-   **Vercel Blob Integration:** Full implementation of direct client-to-blob uploads with proper authentication, file validation, and metadata tracking. **Completed**
+-   **Database Metadata Tracking:** Enhanced file metadata storage system that works with both direct uploads and fallback compression. **Completed**
+-   **TypeScript Safety:** Resolved callback signature mismatches and improved type safety across upload system components. **Completed**
+-   **Canvas Image Loading:** Fixed Image constructor issues in compression pipeline by using globalThis.Image() for better browser compatibility. **Completed**
+
+**Deliverable:** Robust file upload system supporting files up to 10MB, intelligent auto-sizing blurb boxes that adapt to content, and stable OAuth authentication across all deployment scenarios. Users can now upload large cover images without compression quality loss and blurb text automatically sizes for optimal layout.**
+
+**STATUS: MAJOR ENHANCEMENTS COMPLETE. Auto-sizing blurb system provides intelligent layout management. Upload system handles large files seamlessly with dual-path approach. OAuth authentication is stable across all Vercel deployment types. Ready for Phase 11 (Stripe Integration) or continued feature development.**
+
 ## Phase 11: Stripe Integration and Full Credit Management
 
 ### 11.1 Stripe Integration for Credit Purchase

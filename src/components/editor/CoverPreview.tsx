@@ -277,7 +277,7 @@ export default function CoverPreview() {
           }
           break;
         case 'diagonal':
-          currentCtx.fillStyle = color2;
+          currentCtx.strokeStyle = color2;
           currentCtx.lineWidth = (patternScale / 4) * scaleFactor;
           const diagonalSpacing = patternScale * scaleFactor;
           currentCtx.beginPath();
@@ -288,7 +288,7 @@ export default function CoverPreview() {
           currentCtx.stroke();
           break;
         case 'grid':
-          currentCtx.fillStyle = color2;
+          currentCtx.strokeStyle = color2;
           currentCtx.lineWidth = 1 * scaleFactor;
           const gridSize = patternScale * scaleFactor;
           currentCtx.beginPath();
@@ -357,7 +357,7 @@ export default function CoverPreview() {
           }
           break;
         case 'waves':
-          currentCtx.fillStyle = color2;
+          currentCtx.strokeStyle = color2;
           currentCtx.lineWidth = (patternScale / 6) * scaleFactor;
           const waveHeight = patternScale * scaleFactor;
           const waveLength = patternScale * 2 * scaleFactor;

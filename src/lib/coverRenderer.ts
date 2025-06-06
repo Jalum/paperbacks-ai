@@ -288,6 +288,53 @@ function generatePatternBackground(designData: DesignData): string {
         background-size: ${scale}px ${scale}px;
       `
       
+    case 'circles':
+      return `
+        background-color: ${color1};
+        background-image: radial-gradient(circle, ${color2} ${scale * 0.3}px, transparent ${scale * 0.3}px);
+        background-size: ${scale}px ${scale}px;
+      `
+      
+    case 'triangles':
+      return `
+        background-color: ${color1};
+        background-image: 
+          linear-gradient(30deg, transparent 30%, ${color2} 30%, ${color2} 70%, transparent 70%),
+          linear-gradient(150deg, transparent 30%, ${color2} 30%, ${color2} 70%, transparent 70%);
+        background-size: ${scale}px ${scale * 0.866}px;
+      `
+      
+    case 'hexagons':
+      return `
+        background-color: ${color1};
+        background-image: 
+          radial-gradient(circle farthest-side at 0% 50%, transparent 23.5%, ${color2} 25.5%, ${color2} 32%, transparent 34%),
+          radial-gradient(circle farthest-side at 50% 100%, transparent 23.5%, ${color2} 25.5%, ${color2} 32%, transparent 34%),
+          radial-gradient(circle farthest-side at 100% 50%, transparent 23.5%, ${color2} 25.5%, ${color2} 32%, transparent 34%),
+          radial-gradient(circle farthest-side at 50% 0%, transparent 23.5%, ${color2} 25.5%, ${color2} 32%, transparent 34%);
+        background-size: ${scale}px ${scale * 0.866}px;
+        background-position: 0 0, ${scale/2}px ${scale * 0.433}px, 0 ${scale * 0.866}px, ${scale/2}px ${scale * 1.299}px;
+      `
+      
+    case 'waves':
+      return `
+        background-color: ${color1};
+        background-image: 
+          repeating-linear-gradient(0deg, transparent, transparent ${scale/4}px, ${color2} ${scale/4}px, ${color2} ${scale/2}px),
+          repeating-linear-gradient(90deg, transparent, transparent ${scale}px, ${color2} ${scale}px, ${color2} ${scale + 2}px);
+        background-size: ${scale * 2}px ${scale}px;
+      `
+      
+    case 'diamonds':
+      return `
+        background-color: ${color1};
+        background-image: 
+          linear-gradient(45deg, transparent 25%, ${color2} 25%, ${color2} 75%, transparent 75%),
+          linear-gradient(-45deg, transparent 25%, ${color2} 25%, ${color2} 75%, transparent 75%);
+        background-size: ${scale}px ${scale}px;
+        background-position: 0 0, ${scale/2}px ${scale/2}px;
+      `
+      
     default:
       return `background: ${color1};`
   }
