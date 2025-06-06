@@ -14,22 +14,21 @@ declare module 'next-auth' {
   }
 }
 
+// Check if we're in a preview deployment
+const isPreviewDeployment = process.env.VERCEL_ENV === 'preview' || 
+  (process.env.VERCEL_URL && !process.env.VERCEL_URL.includes('paperbacks-ai-online-v3.vercel.app'));
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
-    // Only enable OAuth on production and localhost
-    ...(process.env.NODE_ENV === 'development' || 
-        process.env.VERCEL_ENV === 'production' ? [
+    // Only enable OAuth on production and localhost, NOT on preview deployments
+    ...(!isPreviewDeployment ? [
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID!,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       }),
     ] : []),
   ],
-  // Use redirect proxy for preview deployments
-  ...(process.env.AUTH_REDIRECT_PROXY_URL && {
-    redirectProxyUrl: process.env.AUTH_REDIRECT_PROXY_URL,
-  }),
   callbacks: {
     session: async ({ session, token }) => {
       if (session?.user && token?.sub) {

@@ -19,12 +19,65 @@ const BARCODE_AREA_WIDTH_INCHES = 2.0;
 const BARCODE_AREA_HEIGHT_INCHES = 1.2;
 const BARCODE_MARGIN_FROM_TRIM_EDGE_INCHES = 0.25;
 
+// Text measurement utility for auto-sizing
+const measureTextHeight = (text: string, font: string, fontSize: number, maxWidth: number, lineHeight: number = 1.2): number => {
+  if (!text.trim()) return 0;
+  
+  // Create canvas for text measurement
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return fontSize * lineHeight * 3; // fallback
+  
+  ctx.font = `${fontSize}px ${font}`;
+  
+  // Split by manual line breaks first
+  const paragraphs = text.split(/\r?\n/);
+  let totalLines = 0;
+  
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    if (paragraph.trim() === '') {
+      totalLines += 1; // Empty line
+      return;
+    }
+    
+    const words = paragraph.split(' ').filter(word => word.length > 0);
+    if (words.length === 0) return;
+    
+    let currentLine = '';
+    let linesInParagraph = 0;
+    
+    for (let i = 0; i < words.length; i++) {
+      const testLine = currentLine + (currentLine ? ' ' : '') + words[i];
+      const metrics = ctx.measureText(testLine);
+      
+      if (metrics.width > maxWidth && currentLine) {
+        linesInParagraph++;
+        currentLine = words[i];
+      } else {
+        currentLine = testLine;
+      }
+    }
+    
+    if (currentLine) {
+      linesInParagraph++;
+    }
+    
+    totalLines += linesInParagraph;
+    
+    // Add extra space between paragraphs (except after the last one)
+    if (paragraphIndex < paragraphs.length - 1) {
+      totalLines += 0.5; // Half line spacing between paragraphs
+    }
+  });
+  
+  return totalLines * fontSize * lineHeight;
+};
+
 export default function BackCoverControls() {
   const { designData, setDesignData, bookDetails } = useProjectStore();
   const { data: session } = useSession();
   
   // Local state for inputs that need validation to prevent clamping while typing
-  const [localHeightPercent, setLocalHeightPercent] = useState<string>('');
   const [localYOffsetPercent, setLocalYOffsetPercent] = useState<string>('');
   
   // State for the AI prompt generation process
@@ -86,11 +139,84 @@ export default function BackCoverControls() {
     };
   }, [targetDimensions]);
 
+  // Auto-calculate blurb box height based on text content
+  const calculateAutoHeight = useMemo(() => {
+    if (!designData.backCoverText || !designData.backCoverBlurbEnableBox) return 30;
+    
+    const fontSize = designData.backCoverFontSize || 10;
+    const font = designData.backCoverFont || 'Arial';
+    const padding = designData.backCoverBlurbBoxPadding || 15;
+    const leftMarginPercent = designData.backCoverBlurbBoxLeftMarginPercent || 10;
+    
+    // Calculate available width for text
+    const blurbAreaWidth = targetDimensions.widthPx;
+    const leftMarginPx = blurbAreaWidth * (leftMarginPercent / 100);
+    const rightMarginPx = leftMarginPx; // Same margin on both sides
+    const boxWidth = blurbAreaWidth - leftMarginPx - rightMarginPx;
+    const textDrawAreaWidth = boxWidth - (2 * padding);
+    
+    // Measure text height
+    const textHeightPx = measureTextHeight(designData.backCoverText, font, fontSize, textDrawAreaWidth, 1.2);
+    const totalBoxHeightPx = textHeightPx + (2 * padding);
+    
+    // Convert to percentage of back cover height
+    const heightPercent = (totalBoxHeightPx / targetDimensions.heightPx) * 100;
+    
+    // Ensure minimum height and round to reasonable precision
+    return Math.max(10, Math.round(heightPercent));
+  }, [designData.backCoverText, designData.backCoverFontSize, designData.backCoverFont, 
+      designData.backCoverBlurbBoxPadding, designData.backCoverBlurbBoxLeftMarginPercent, 
+      designData.backCoverBlurbEnableBox, targetDimensions]);
+
+  // Calculate optimal vertical centering while respecting barcode area
+  const calculateOptimalYOffset = useMemo(() => {
+    if (!designData.backCoverBlurbEnableBox) return 0;
+    
+    const autoHeight = calculateAutoHeight;
+    const maxSafeVertical = barcodeConstraints.maxSafeVerticalPercent;
+    
+    // Try to center the box vertically
+    // Center position is 50%, but we need to account for box height
+    // Box extends from center - height/2 to center + height/2
+    // We want center + height/2 <= maxSafeVertical
+    // So center <= maxSafeVertical - height/2
+    // In terms of offset: center = 50 + (50 * offset / 100)
+    // So: 50 + (50 * offset / 100) <= maxSafeVertical - height/2
+    // offset <= ((maxSafeVertical - height/2 - 50) * 100) / 50
+    
+    const maxCenterY = maxSafeVertical - autoHeight / 2;
+    const maxOffset = ((maxCenterY - 50) * 100) / 50;
+    
+    // Try to center perfectly (offset = 0), but clamp if needed
+    return Math.min(0, Math.max(-50, Math.round(maxOffset)));
+  }, [calculateAutoHeight, barcodeConstraints.maxSafeVerticalPercent, designData.backCoverBlurbEnableBox]);
+
+  // Update auto-calculated values in store when they change
+  useEffect(() => {
+    if (designData.backCoverBlurbEnableBox) {
+      const newHeight = calculateAutoHeight;
+      const newYOffset = calculateOptimalYOffset;
+      
+      // Only update if values have changed to prevent infinite loops
+      const updates: Partial<DesignData> = {};
+      if (designData.backCoverBlurbBoxHeightPercent !== newHeight) {
+        updates.backCoverBlurbBoxHeightPercent = newHeight;
+      }
+      if (designData.backCoverBlurbBoxYOffsetPercent !== newYOffset) {
+        updates.backCoverBlurbBoxYOffsetPercent = newYOffset;
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        setDesignData(updates);
+      }
+    }
+  }, [calculateAutoHeight, calculateOptimalYOffset, designData.backCoverBlurbEnableBox, 
+      designData.backCoverBlurbBoxHeightPercent, designData.backCoverBlurbBoxYOffsetPercent, setDesignData]);
+
   // Sync local state with store values when they change externally
   useEffect(() => {
-    setLocalHeightPercent((designData.backCoverBlurbBoxHeightPercent || 30).toString());
-    setLocalYOffsetPercent((designData.backCoverBlurbBoxYOffsetPercent || 10).toString());
-  }, [designData.backCoverBlurbBoxHeightPercent, designData.backCoverBlurbBoxYOffsetPercent, bookDetails.trimSize]);
+    setLocalYOffsetPercent((designData.backCoverBlurbBoxYOffsetPercent || 0).toString());
+  }, [designData.backCoverBlurbBoxYOffsetPercent, bookDetails.trimSize]);
 
   const handleAIInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -101,10 +227,6 @@ export default function BackCoverControls() {
     const { name, value, type } = e.target;
     
     // Handle special percentage inputs with local state to prevent clamping while typing
-    if (name === 'backCoverBlurbBoxHeightPercent') {
-      setLocalHeightPercent(value);
-      return;
-    }
     if (name === 'backCoverBlurbBoxYOffsetPercent') {
       setLocalYOffsetPercent(value);
       return;
@@ -123,39 +245,21 @@ export default function BackCoverControls() {
     const { name, value } = e.target;
     let processedValue = parseFloat(value);
 
-    // Only validate Y-axis constraints for blurb box height and Y offset when focus is lost
-    if (name === 'backCoverBlurbBoxHeightPercent' || name === 'backCoverBlurbBoxYOffsetPercent') {
-      // Use local state values for accurate calculation
-      const currentHeight = name === 'backCoverBlurbBoxHeightPercent' ? processedValue : parseFloat(localHeightPercent);
-      const currentYOffset = name === 'backCoverBlurbBoxYOffsetPercent' ? processedValue : parseFloat(localYOffsetPercent);
-      
-      const proposedHeight = name === 'backCoverBlurbBoxHeightPercent' ? processedValue : currentHeight;
-      const proposedYOffset = name === 'backCoverBlurbBoxYOffsetPercent' ? processedValue : currentYOffset;
+    // Only validate Y-axis constraints for Y offset when focus is lost (height is auto-calculated)
+    if (name === 'backCoverBlurbBoxYOffsetPercent') {
+      const currentHeight = calculateAutoHeight;
       
       // Check if this would extend into the safety zone
-      if (barcodeConstraints.wouldExtendIntoSafetyZone(proposedHeight, proposedYOffset)) {
-        // Find a safe value by reducing the proposed value
-        if (name === 'backCoverBlurbBoxHeightPercent') {
-          // Reduce height until safe
-          for (let testHeight = processedValue; testHeight >= 10; testHeight -= 1) {
-            if (!barcodeConstraints.wouldExtendIntoSafetyZone(testHeight, currentYOffset)) {
-              processedValue = testHeight;
-              break;
-            }
+      if (barcodeConstraints.wouldExtendIntoSafetyZone(currentHeight, processedValue)) {
+        // Reduce Y offset until safe (can go negative)
+        for (let testYOffset = processedValue; testYOffset >= -50; testYOffset -= 1) {
+          if (!barcodeConstraints.wouldExtendIntoSafetyZone(currentHeight, testYOffset)) {
+            processedValue = testYOffset;
+            break;
           }
-          // Update local state to reflect the clamped value
-          setLocalHeightPercent(processedValue.toString());
-        } else {
-          // Reduce Y offset until safe (can go negative)
-          for (let testYOffset = processedValue; testYOffset >= -50; testYOffset -= 1) {
-            if (!barcodeConstraints.wouldExtendIntoSafetyZone(currentHeight, testYOffset)) {
-              processedValue = testYOffset;
-              break;
-            }
-          }
-          // Update local state to reflect the clamped value
-          setLocalYOffsetPercent(processedValue.toString());
         }
+        // Update local state to reflect the clamped value
+        setLocalYOffsetPercent(processedValue.toString());
       }
       
       // Always update the store with the final value (clamped or original)
@@ -163,49 +267,6 @@ export default function BackCoverControls() {
     }
   };
 
-  // Effect to fix existing values when book size changes (Y-axis only)
-  // Only triggers when book trim size changes, not when user types in input fields
-  // ESLint warning about missing dependencies is intentional - we don't want this to trigger during typing
-  useEffect(() => {
-    if (designData.backCoverBlurbEnableBox) {
-      const currentHeight = designData.backCoverBlurbBoxHeightPercent || 30;
-      const currentYOffset = designData.backCoverBlurbBoxYOffsetPercent || 10;
-      
-      // Check if current configuration extends into safety zone
-      if (barcodeConstraints.wouldExtendIntoSafetyZone(currentHeight, currentYOffset)) {
-        const updates: Partial<DesignData> = {};
-        
-        // Try to fix by reducing height first
-        let fixedHeight = currentHeight;
-        for (let h = currentHeight; h >= 10; h -= 5) {
-          if (!barcodeConstraints.wouldExtendIntoSafetyZone(h, currentYOffset)) {
-            fixedHeight = h;
-            break;
-          }
-        }
-        
-        // If height reduction didn't work, reduce Y offset (can go negative)
-        let fixedYOffset = currentYOffset;
-        if (barcodeConstraints.wouldExtendIntoSafetyZone(fixedHeight, currentYOffset)) {
-          for (let y = currentYOffset; y >= -50; y -= 5) {
-            if (!barcodeConstraints.wouldExtendIntoSafetyZone(fixedHeight, y)) {
-              fixedYOffset = y;
-              break;
-            }
-          }
-        }
-        
-        // Apply fixes if values changed
-        if (fixedHeight !== currentHeight) updates.backCoverBlurbBoxHeightPercent = fixedHeight;
-        if (fixedYOffset !== currentYOffset) updates.backCoverBlurbBoxYOffsetPercent = fixedYOffset;
-        
-        if (Object.keys(updates).length > 0) {
-          setDesignData(updates);
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookDetails.trimSize, designData.backCoverBlurbEnableBox]); // Only trigger on book size changes, not field changes
 
   // Directly use designData from store, with fallbacks for potentially undefined values if necessary
   // Our initialDesignData in store.ts should provide these defaults now.
@@ -736,7 +797,7 @@ export default function BackCoverControls() {
                   />
                 </div>
               </div>
-              <p className="text-xs text-gray-500 col-span-2">Position and Size (centered horizontally with fixed margins):</p>
+              <p className="text-xs text-green-600 col-span-2">📏 Auto-sizing enabled: Box height adjusts to text content</p>
               <p className="text-xs text-amber-600 col-span-2">⚠️ Blurb box cannot extend below {barcodeConstraints.maxSafeVerticalPercent}% to protect barcode area</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -750,8 +811,10 @@ export default function BackCoverControls() {
               </div>
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label htmlFor="backCoverBlurbBoxHeightPercent" className="block text-xs font-medium text-gray-600">Height (%)</label>
-                  <input type="number" id="backCoverBlurbBoxHeightPercent" name="backCoverBlurbBoxHeightPercent" value={localHeightPercent} onChange={handleChange} onBlur={handleBlur} min="10" max="100" step="1" className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm text-xs" />
+                  <label className="block text-xs font-medium text-gray-600">Height (Auto-calculated)</label>
+                  <div className="mt-1 block w-full px-2 py-1 border border-gray-200 rounded-md bg-gray-50 text-xs text-gray-700">
+                    {calculateAutoHeight}% (fits text content)
+                  </div>
                 </div>
               </div>
             </>

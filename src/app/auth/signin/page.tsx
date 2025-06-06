@@ -4,6 +4,7 @@ import { getProviders, signIn, getSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ProvidersResponse, AuthProvider } from '@/types/auth';
+import PreviewNotice from '@/components/auth/PreviewNotice';
 
 export default function SignIn() {
   const [providers, setProviders] = useState<ProvidersResponse | null>(null);
@@ -33,6 +34,7 @@ export default function SignIn() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8">
+        <PreviewNotice />
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Sign in to your account
