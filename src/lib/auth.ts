@@ -55,13 +55,31 @@ export const authOptions: NextAuthOptions = {
       }
       return token
     },
-    signIn: async () => {
+    signIn: async ({ user }) => {
       // Allow sign in only if we have providers configured
       if (isPreviewDeployment) {
         console.log('Blocking sign in on preview deployment');
         return false;
       }
-      return true;
+      
+      // Check email allowlist
+      const allowedEmailsEnv = process.env.ALLOWED_EMAILS || '';
+      const allowedEmails = allowedEmailsEnv.split(',').map(email => email.trim()).filter(Boolean);
+      
+      // If no allowed emails are configured, deny all access (fail-safe)
+      if (allowedEmails.length === 0) {
+        console.log('No allowed emails configured. Denying access.');
+        return false;
+      }
+      
+      // Check if user's email is in the allowlist
+      if (user.email && allowedEmails.includes(user.email)) {
+        console.log(`Allowing access for ${user.email}`);
+        return true;
+      }
+      
+      console.log(`Denying access for ${user.email} - not in allowlist`);
+      return false;
     },
   },
   session: {

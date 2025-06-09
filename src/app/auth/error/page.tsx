@@ -13,7 +13,7 @@ function ErrorContent() {
       case 'Configuration':
         return 'There is a problem with the server configuration.';
       case 'AccessDenied':
-        return 'Access denied. You do not have permission to sign in.';
+        return 'Access denied. Your email address is not authorized to use this application. Please contact the administrator if you believe this is an error.';
       case 'Verification':
         return 'The verification token has expired or has already been used.';
       case 'Default':
