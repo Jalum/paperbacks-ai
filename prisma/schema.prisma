@@ -59,6 +59,7 @@ model User {
   projects Project[]
   uploadedFiles UploadedFile[]
   downloads Download[]
+  transactions Transaction[]
 
   @@map("users")
 }
@@ -156,4 +157,62 @@ enum ProjectStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+}
+
+// Transaction model for Stripe payments
+model Transaction {
+  id                    String   @id @default(cuid())
+  userId                String   @map("user_id")
+  stripePaymentIntentId String?  @unique @map("stripe_payment_intent_id")
+  stripeSessionId       String?  @unique @map("stripe_session_id")
+  creditPackageId       String   @map("credit_package_id")
+  creditsAmount         Int      @map("credits_amount")
+  amountCents           Int      @map("amount_cents") // Amount in cents to avoid floating point issues
+  currency              String   @default("usd")
+  status                TransactionStatus @default(PENDING)
+  
+  // Metadata
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  completedAt           DateTime? @map("completed_at")
+  
+  // Relations
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creditPackage         CreditPackage @relation(fields: [creditPackageId], references: [id])
+  
+  @@map("transactions")
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Credit package definitions
+model CreditPackage {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Starter Pack", "Pro Pack", "Enterprise Pack"
+  credits     Int      // Number of credits in the package
+  priceCents  Int      @map("price_cents") // Price in cents
+  currency    String   @default("usd")
+  description String?
+  popular     Boolean  @default(false) // Flag for highlighting popular packages
+  active      Boolean  @default(true)
+  
+  // Metadata
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  transactions Transaction[]
+  
+  @@map("credit_packages")
+  @@index([active])
+}
+
+// Transaction status enum
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
 }

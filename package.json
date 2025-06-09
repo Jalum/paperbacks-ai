@@ -12,6 +12,7 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.9.1",
     "@prisma/client": "^6.9.0",
+    "@stripe/stripe-js": "^7.3.1",
     "@vercel/blob": "^1.1.1",
     "canvas": "^3.1.0",
     "colorthief": "^2.6.0",
@@ -27,6 +28,7 @@
     "react-dropzone": "^14.3.8",
     "react-hook-form": "^7.56.4",
     "sharp": "^0.34.2",
+    "stripe": "^18.2.1",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
@@ -38,6 +40,10 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
     "tailwindcss": "^4",
+    "tsx": "^4.19.4",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

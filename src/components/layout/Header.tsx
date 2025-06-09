@@ -24,6 +24,12 @@ const Header: React.FC = () => {
               <Link href="/editor" className="hover:text-gray-300">
                 Editor
               </Link>
+              <Link href="/credits" className="hover:text-gray-300">
+                Buy Credits
+              </Link>
+              <Link href="/transactions" className="hover:text-gray-300">
+                Transactions
+              </Link>
               <CreditBalance />
               <div className="flex items-center space-x-3">
                 {session.user?.image && (

@@ -362,6 +362,12 @@ export default function BackCoverControls() {
       console.log('BackCoverControls: Received image_url from API:', result.image_url); // DEBUG LINE
       setDesignData({ backCoverAIImageURL: result.image_url });
       
+      // Show credit usage info if available
+      if (result.creditsUsed !== undefined && result.newBalance !== undefined) {
+        // You might want to trigger a credit balance refresh here
+        console.log(`AI Generation used ${result.creditsUsed} credits. New balance: ${result.newBalance}`);
+      }
+      
       // Track successful image generation
       analytics.trackUserAction('image_generation_success', 'ai', undefined, session?.user?.email || undefined);
       
@@ -623,7 +629,7 @@ export default function BackCoverControls() {
             disabled={isGeneratingAI || isSuggestingPrompt || !designData.backCoverAIPrompt}
           >
             {isGeneratingAI && <LoadingSpinner size="sm" className="text-white" />}
-            <span>{isGeneratingAI ? 'Generating Image...' : 'Confirm Prompt & Generate Image'}</span>
+            <span>{isGeneratingAI ? 'Generating Image...' : 'Generate Image (10 Credits)'}</span>
           </button>
 
           {aiError && (
